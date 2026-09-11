@@ -1,0 +1,11 @@
+node_modules/
+dist/
+lib/
+private/
+*.tgz
+*.tsbuildinfo
+.env*
+.sites-runtime/
+output/
+test-results/
+playwright-report/

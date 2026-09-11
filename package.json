@@ -1,0 +1,55 @@
+{
+  "name": "@olgakraven/lecture-engine",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc -b",
+    "build": "tsc -b && vite build",
+    "build:engine": "vite build --config vite.engine.config.ts && tsc --ignoreConfig src/engine/index.ts --declaration --emitDeclarationOnly --outDir lib --jsx react-jsx --moduleResolution bundler --module esnext --target es2023 --skipLibCheck --types vite/client && node scripts/finalize-types.mjs",
+    "preview": "vite preview",
+    "validate:content": "node --experimental-strip-types scripts/validate-content.mjs",
+    "test:session": "node --experimental-strip-types --test scripts/session.test.mjs",
+    "check:privacy": "node scripts/check-privacy.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^1.38.0",
+    "motion": "^13.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^24.13.3",
+    "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsqr": "^1.4.0",
+    "oxlint": "^1.79.0",
+    "pdf-lib": "^1.17.1",
+    "pngjs": "^7.0.0",
+    "pdfjs-dist": "^6.3.289",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.4",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/lecture-engine.js"
+    },
+    "./style.css": "./lib/lecture-engine.css"
+  },
+  "files": [
+    "lib",
+    "docs",
+    "public/brand",
+    "public/fonts"
+  ],
+  "types": "./lib/index.d.ts"
+}
