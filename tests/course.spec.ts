@@ -460,8 +460,17 @@ test('mobile hides answers, results and retries after submit, resize and reload'
 })
 test('text diagram closes explicitly or with Escape and restores focus', async ({ page }) => {
   await page.goto('./?lecture=VISUALS&slide=VIS-03')
-  const toggle = page.getByRole('button', { name: 'Текстовое представление', exact: true })
+  await expect(
+    page.getByRole('button', { name: 'Текстовое представление', exact: true }),
+  ).toHaveCount(0)
+  const toggle = page.getByRole('button', { name: 'Рассмотреть схему', exact: true })
+  await expect(toggle).toHaveCSS('background-color', 'rgb(241, 242, 244)')
+  await expect(toggle).toHaveCSS('border-radius', '999px')
   await toggle.click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Текстовое представление', exact: true })
+    .click()
   const dialog = page.getByRole('dialog', { name: 'Текстовое представление', exact: true })
   await expect(dialog).toBeVisible()
   await dialog.locator('.diagram-dialog-content').evaluate((el) => {
@@ -471,6 +480,10 @@ test('text diagram closes explicitly or with Escape and restores focus', async (
   await expect(dialog).toHaveCount(0)
   await expect(toggle).toBeFocused()
   await toggle.click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Текстовое представление', exact: true })
+    .click()
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
   await expect(toggle).toBeFocused()
@@ -490,6 +503,45 @@ test('text diagram closes explicitly or with Escape and restores focus', async (
   await close.click()
   await expect(dialog).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Рассмотреть схему', exact: true })).toBeFocused()
+})
+
+test('diagram enlargement and text synchronize between presenter and audience', async ({
+  page,
+}) => {
+  await page.goto('./?lecture=L001&slide=L001-S03')
+  const popup = page.waitForEvent('popup')
+  await page.getByRole('button', { name: 'Начать занятие в двух окнах', exact: true }).click()
+  const audience = await popup
+  await expect(page.locator('.connection')).toHaveText('Синхронизировано')
+  await expect(
+    page.getByRole('button', { name: 'Текстовое представление', exact: true }),
+  ).toHaveCount(0)
+  const open = page.getByRole('button', { name: 'Рассмотреть схему', exact: true })
+  await open.click()
+  expect(await page.getByRole('dialog').evaluate((el) => el.parentElement === document.body)).toBe(
+    true,
+  )
+  await expect(audience.getByRole('dialog', { name: 'Подробная схема', exact: true })).toBeVisible()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Текстовое представление', exact: true })
+    .click()
+  await expect(
+    audience.getByRole('dialog', { name: 'Текстовое представление', exact: true }),
+  ).toBeVisible()
+  await audience.reload()
+  await expect(
+    audience.getByRole('dialog', { name: 'Текстовое представление', exact: true }),
+  ).toBeVisible()
+  await audience.getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(audience.getByRole('dialog')).toHaveCount(0)
+  await audience.getByRole('button', { name: 'Рассмотреть схему', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Подробная схема', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(audience.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Вперёд', exact: true }).click()
+  await expect(audience.getByRole('dialog')).toHaveCount(0)
 })
 
 test('all diagrams fit SVG bounds and mobile reading stays within viewport', async ({

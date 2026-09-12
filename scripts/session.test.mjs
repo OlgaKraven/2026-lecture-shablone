@@ -10,3 +10,16 @@ test('duplicate and old snapshots ignored; new epoch accepted',()=>{assert.equal
 test('single and multiple require exact set',()=>{const task={id:'t',type:'single',prompt:'',options:[{id:'a',text:'A'},{id:'b',text:'B'}]};const key={type:'single',correct:['b'],explanation:'ok'};assert.equal(evaluate(task,key,[]).status,'unanswered');assert.equal(evaluate(task,key,['b']).score,1);assert.equal(evaluate(task,key,['a','b']).score,0);assert.equal(evaluate({...task,type:'multiple'},{...key,type:'multiple',correct:['a','b']},['a']).score,0);assert.equal(evaluate({...task,type:'multiple'},{...key,type:'multiple',correct:['a','b']},['a','b']).score,1)})
 test('short normalization, zero, numeric tolerance',()=>{const t={id:'t',type:'short',prompt:''};assert.equal(evaluate(t,{type:'short',accepted:['критерий'],explanation:''},'  КРИТЕРИЙ ').score,1);assert.equal(evaluate(t,{type:'short',numeric:{value:0,tolerance:0},explanation:''},'0').score,1);assert.equal(evaluate(t,{type:'short',numeric:{value:0,tolerance:.1},explanation:''},'0,05').score,1);assert.equal(evaluate(t,{type:'short',numeric:{value:0,tolerance:0},explanation:''},'').status,'unanswered')})
 test('matching gives quarter point per correct pair',()=>{const t={id:'t',type:'matching',prompt:'',items:['i1','i2','i3','i4'].map(id=>({id,text:id})),options:['a','b','c','d'].map(id=>({id,text:id}))};const k={type:'matching',pairs:{i1:'c',i2:'d',i3:'b',i4:'a'},explanation:''};assert.equal(evaluate(t,k,{}).status,'unanswered');assert.equal(evaluate(t,k,{i1:'c'}).score,.25);assert.equal(evaluate(t,k,{i1:'c',i2:'d'}).score,.5);assert.equal(evaluate(t,k,k.pairs).score,1)})
+
+test('diagram state and commands accept only known views in the same session',()=>{
+ for(const view of [null,'diagram','text']) {
+  assert.equal(validMessage({...message,state:{...state,diagramView:view}},scope),true)
+  assert.equal(validMessage({...message,type:'DIAGRAM',slideId:'s1',diagramView:view},scope),true)
+ }
+ for(const view of ['unknown',{},42]) {
+  assert.equal(validMessage({...message,state:{...state,diagramView:view}},scope),false)
+  assert.equal(validMessage({...message,type:'DIAGRAM',slideId:'s1',diagramView:view},scope),false)
+ }
+ assert.equal(validMessage({...message,type:'DIAGRAM',slideId:'s1',diagramView:'diagram',session:'other'},scope),false)
+ assert.equal(validMessage({...message,type:'DIAGRAM',diagramView:'diagram'},scope),false)
+})

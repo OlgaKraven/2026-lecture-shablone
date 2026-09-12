@@ -1,11 +1,20 @@
-import { useId, useState } from 'react'
+import { createContext, useContext, useId, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Visual } from './model'
 import { diagramLayout } from './diagram-layout'
 import { InfographicMobile } from './InfographicMobile'
 import { Modal } from './Modal'
+export type DiagramView = 'diagram' | 'text' | null
+export const DiagramControl = createContext<{
+  view: DiagramView
+  setView: (view: DiagramView) => void
+} | null>(null)
 export function Infographic({ visual, base = '/' }: { visual: Visual; base?: string }) {
   const id = useId().replace(/:/g, '')
-  const [view, setView] = useState<'diagram' | 'text' | null>(null)
+  const [localView, setLocalView] = useState<DiagramView>(null)
+  const control = useContext(DiagramControl)
+  const view = control ? control.view : localView
+  const setView = control ? control.setView : setLocalView
   const layout = diagramLayout(visual, id, base)
   const canvas = (suffix: string) => {
     const marker = id + suffix
@@ -19,7 +28,7 @@ export function Infographic({ visual, base = '/' }: { visual: Visual; base?: str
       >
         <title id={`${marker}-title`}>{visual.caption}</title>
         <desc id={`${marker}-desc`}>
-          Подробное текстовое представление доступно по кнопке «Текстовое представление».
+          Текстовое представление доступно внутри окна «Рассмотреть схему».
         </desc>
         <defs>
           <marker
@@ -45,49 +54,48 @@ export function Infographic({ visual, base = '/' }: { visual: Visual; base?: str
       </div>
       <figcaption>{visual.caption}</figcaption>
       <div className="infographic-actions">
-        <button className="text-button" aria-haspopup="dialog" onClick={() => setView('diagram')}>
+        <button
+          className="diagram-open-button"
+          aria-haspopup="dialog"
+          onClick={() => setView('diagram')}
+        >
           Рассмотреть схему
         </button>
-        <button
-          className="text-button infographic-text-toggle"
-          aria-haspopup="dialog"
-          onClick={() => setView('text')}
-        >
-          Текстовое представление
-        </button>
       </div>
-      {view && (
-        <Modal
-          title={view === 'text' ? 'Текстовое представление' : 'Подробная схема'}
-          wide
-          onClose={() => setView(null)}
-        >
-          <div
-            className="diagram-dialog-content"
-            tabIndex={0}
-            role="region"
-            aria-label={view === 'text' ? 'Текст схемы' : 'Изображение схемы'}
+      {view &&
+        createPortal(
+          <Modal
+            title={view === 'text' ? 'Текстовое представление' : 'Подробная схема'}
+            wide
+            onClose={() => setView(null)}
           >
-            {view === 'text' ? (
-              <InfographicMobile visual={visual} base={base} />
-            ) : (
-              <div className="diagram-expanded">{canvas('-expanded')}</div>
-            )}
-            <p>{visual.caption}</p>
-          </div>
-          <div className="diagram-dialog-actions">
-            <button
-              className="button ghost"
-              onClick={() => setView(view === 'text' ? 'diagram' : 'text')}
+            <div
+              className="diagram-dialog-content"
+              tabIndex={0}
+              role="region"
+              aria-label={view === 'text' ? 'Текст схемы' : 'Изображение схемы'}
             >
-              {view === 'text' ? 'Показать схему' : 'Текстовое представление'}
-            </button>
-            <button className="button primary" onClick={() => setView(null)}>
-              Закрыть
-            </button>
-          </div>
-        </Modal>
-      )}
+              {view === 'text' ? (
+                <InfographicMobile visual={visual} base={base} />
+              ) : (
+                <div className="diagram-expanded">{canvas('-expanded')}</div>
+              )}
+              <p>{visual.caption}</p>
+            </div>
+            <div className="diagram-dialog-actions">
+              <button
+                className="button ghost"
+                onClick={() => setView(view === 'text' ? 'diagram' : 'text')}
+              >
+                {view === 'text' ? 'Показать схему' : 'Текстовое представление'}
+              </button>
+              <button className="button primary" onClick={() => setView(null)}>
+                Закрыть
+              </button>
+            </div>
+          </Modal>,
+          document.body,
+        )}
     </figure>
   )
 }

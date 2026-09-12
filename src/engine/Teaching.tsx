@@ -19,6 +19,7 @@ import { validateTeacherPack } from './validation'
 import { TimingPlan } from './TimingPlan'
 import { slideText } from './CourseTools'
 import { SlideView } from './SlideView'
+import { DiagramControl, type DiagramView } from './Infographic'
 import { createBus, newer } from './session'
 import type { PublicState } from './session'
 import { AssessmentProvider, AssessmentSync } from './Assessment'
@@ -44,6 +45,7 @@ export default function Teaching(props: Props) {
   )
 }
 function Audience({ course, lecture, base, session, profile }: Props) {
+  const audienceBus = useRef<ReturnType<typeof createBus> | null>(null)
   const [state, setState] = useState<PublicState | null>(null)
   const current = useRef<PublicState | null>(null)
   const [full, setFull] = useState(false)
@@ -85,11 +87,13 @@ function Audience({ course, lecture, base, session, profile }: Props) {
         }
       },
     )
+    audienceBus.current = bus
     bus.send({ type: 'HELLO' })
     const timer = setInterval(() => bus.send({ type: 'HELLO' }), 2000)
     return () => {
       clearInterval(timer)
       bus.close()
+      audienceBus.current = null
     }
   }, [course.id, course.contentVersion, lecture, base, session])
   const i = state ? lecture.slides.findIndex((s) => s.id === state.slideId) : -1
@@ -98,15 +102,27 @@ function Audience({ course, lecture, base, session, profile }: Props) {
       {state && i >= 0 && !state.black ? (
         <div className="audience-slide" key={`${state.slideId}:${state.replay}`}>
           <AssessmentProvider course={course} base={base} readonly snapshot={state.assessment}>
-            <SlideView
-              course={course}
-              lecture={lecture}
-              slide={lecture.slides[i]}
-              profile={state.profile || profile}
-              base={base}
-              number={i + 1}
-              interactive
-            />
+            <DiagramControl.Provider
+              value={{
+                view: state.diagramView ?? null,
+                setView: (diagramView) =>
+                  audienceBus.current?.send({
+                    type: 'DIAGRAM',
+                    slideId: state.slideId,
+                    diagramView,
+                  }),
+              }}
+            >
+              <SlideView
+                course={course}
+                lecture={lecture}
+                slide={lecture.slides[i]}
+                profile={state.profile || profile}
+                base={base}
+                number={i + 1}
+                interactive
+              />
+            </DiagramControl.Provider>
           </AssessmentProvider>
           {state.pointer && (
             <span
@@ -150,6 +166,11 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
     read(sessionKey, { slideId: initialSlide, black: false }),
   )
   const [selected, setSelected] = useState(shown.slideId)
+  const [diagram, setDiagram] = useState<{ slideId: string; view: DiagramView }>({
+    slideId: shown.slideId,
+    view: null,
+  })
+  const diagramView = diagram.slideId === shown.slideId ? diagram.view : null
   const [black, setBlack] = useState(shown.black)
   const [replay, setReplay] = useState(0)
   const [pointerEnabled, setPointerEnabled] = useState(false)
@@ -194,6 +215,7 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
   const selectedSlide = lecture.slides.find((s) => s.id === selected) || lecture.slides[shownIndex]
   const note = notes[selectedSlide.id] || emptyNote()
   const change = (id: string) => {
+    setDiagram({ slideId: id, view: null })
     setShown({ slideId: id, black })
     setSelected(id)
   }
@@ -234,6 +256,8 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
       { course: course.id, lecture: lecture.id, version: course.contentVersion, base, session },
       (m) => {
         if (m.type === 'HELLO') bus.send({ type: 'STATE', state: stateRef.current })
+        if (m.type === 'DIAGRAM' && m.slideId === stateRef.current.slideId)
+          setDiagram({ slideId: m.slideId, view: m.diagramView ?? null })
         if (
           m.type === 'ACK' &&
           m.epoch === stateRef.current.epoch &&
@@ -266,13 +290,24 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
       replay,
       profile,
       assessment,
+      diagramView: black ? null : diagramView,
       pointer: pointerEnabled ? pointer : null,
       sequence: stateRef.current.sequence + 1,
     }
     save(sessionKey, { slideId: shown.slideId, black })
     setStatus('Синхронизация…')
     busRef.current?.send({ type: 'STATE', state: stateRef.current })
-  }, [shown.slideId, black, replay, profile, sessionKey, assessment, pointer, pointerEnabled])
+  }, [
+    shown.slideId,
+    black,
+    replay,
+    profile,
+    sessionKey,
+    assessment,
+    pointer,
+    pointerEnabled,
+    diagramView,
+  ])
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
@@ -284,6 +319,7 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
     const key = (e: KeyboardEvent) => {
       if (
         !locked ||
+        document.querySelector('dialog[open]') ||
         (e.target as HTMLElement).closest('input,textarea,select,button,[contenteditable]')
       )
         return
@@ -467,15 +503,24 @@ function Presenter({ course, lecture, base, profile, session, initialSlide, onEx
             }}
             onPointerLeave={() => setPointer(null)}
           >
-            <SlideView
-              course={course}
-              lecture={lecture}
-              slide={lecture.slides[shownIndex]}
-              profile={profile}
-              base={base}
-              number={shownIndex + 1}
-              interactive
-            />
+            <DiagramControl.Provider
+              value={{
+                view: black ? null : diagramView,
+                setView: (view) => {
+                  if (locked) setDiagram({ slideId: shown.slideId, view })
+                },
+              }}
+            >
+              <SlideView
+                course={course}
+                lecture={lecture}
+                slide={lecture.slides[shownIndex]}
+                profile={profile}
+                base={base}
+                number={shownIndex + 1}
+                interactive
+              />
+            </DiagramControl.Provider>
             {pointerEnabled && pointer && (
               <span
                 className="laser-pointer"
