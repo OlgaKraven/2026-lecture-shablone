@@ -9,6 +9,7 @@ export function SlideView({course,lecture,slide,profile,base,number,interactive=
  <header className="slide-header"><div className="slide-brand"><img src={assetUrl(course.logo,base)} alt="Логотип"/><span>{course.code} · {lecture.semester}-й семестр</span></div><span className="slide-number">{String(number).padStart(2,'0')}</span></header>
  <div className="slide-content"><div className="slide-copy"><p className="slide-kicker">{slide.kicker}</p><h2>{slide.title}</h2>
  {(slide.kind==='literature'||slide.kind==='materials')&&<Resources course={course} slide={slide} base={base}/>}
+ {slide.kind==='agenda'&&<ol className="topic-agenda">{lecture.slides.filter(s=>s.kind==='section').map((s,i)=><li key={s.id}><span>{String(i+1).padStart(2,'0')}</span><strong>{s.title}</strong></li>)}</ol>}
  {slide.body&&<p className="slide-body-copy">{slide.body}</p>}
  {slide.bullets&&<ul>{slide.bullets.map(x=><li key={x}>{x}</li>)}</ul>}
  {slide.visual&&<Infographic visual={slide.visual} base={base}/>}
