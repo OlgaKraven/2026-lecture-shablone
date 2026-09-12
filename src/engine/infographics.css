@@ -40,26 +40,18 @@
   font-size: inherit;
   white-space: nowrap;
 }
-.infographic-actions details {
-  max-width: 60%;
-  position: relative;
-}
-.infographic-actions details[open] {
-  position: absolute;
-  z-index: 10;
-  inset: 10% 5% auto;
-  background: white;
-  border: 1px solid #d9dfe9;
-  border-radius: 12px;
-  box-shadow: 0 12px 40px #18223822;
-  max-width: none;
-  max-height: 75%;
+.diagram-dialog-content {
+  max-height: 60dvh;
   overflow: auto;
-  padding: 1.2rem;
-  color: #20242c;
+  overscroll-behavior: contain;
+  padding: 0.25rem;
 }
-.infographic-actions summary {
-  cursor: pointer;
+.diagram-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 .dialog-wide {
   width: min(94vw, 1200px);
@@ -232,7 +224,7 @@
   .active-slide .infographic-actions {
     display: block;
   }
-  .active-slide .infographic-actions > details {
+  .active-slide .infographic-actions > button.infographic-text-toggle {
     display: none;
   }
   .active-slide .infographic-actions .text-button {

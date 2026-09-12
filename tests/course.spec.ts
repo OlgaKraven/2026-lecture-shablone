@@ -458,6 +458,40 @@ test('mobile hides answers, results and retries after submit, resize and reload'
   await expect(page.getByRole('button', { name: 'Ещё попытка' })).toHaveCount(0)
   await expect(page.getByRole('radio').first()).toBeDisabled()
 })
+test('text diagram closes explicitly or with Escape and restores focus', async ({ page }) => {
+  await page.goto('./?lecture=VISUALS&slide=VIS-03')
+  const toggle = page.getByRole('button', { name: 'Текстовое представление', exact: true })
+  await toggle.click()
+  const dialog = page.getByRole('dialog', { name: 'Текстовое представление', exact: true })
+  await expect(dialog).toBeVisible()
+  await dialog.locator('.diagram-dialog-content').evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(toggle).toBeFocused()
+  await toggle.click()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(toggle).toBeFocused()
+  await page.getByRole('button', { name: 'Рассмотреть схему', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Текстовое представление', exact: true })
+    .click()
+  await expect(dialog).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await dialog.locator('.diagram-dialog-content').evaluate((el) => {
+    el.scrollTop = el.scrollHeight
+  })
+  const close = dialog.getByRole('button', { name: 'Закрыть окно', exact: true })
+  await expect(close).toBeInViewport()
+  await expect(dialog.getByRole('button', { name: 'Закрыть', exact: true })).toBeInViewport()
+  await close.click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Рассмотреть схему', exact: true })).toBeFocused()
+})
+
 test('all diagrams fit SVG bounds and mobile reading stays within viewport', async ({
   page,
   browserName,

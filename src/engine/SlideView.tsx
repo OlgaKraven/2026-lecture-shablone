@@ -68,9 +68,10 @@ export function SlideView({
               {slide.image.caption && <figcaption>{slide.image.caption}</figcaption>}
             </figure>
           )}
-          {slide.visual && <Infographic visual={slide.visual} base={base} />}
+          {slide.visual && <Infographic key={slide.id} visual={slide.visual} base={base} />}
           {slide.steps && !slide.visual && (
             <Infographic
+              key={slide.id}
               visual={{
                 type: 'process',
                 items: slide.steps,
