@@ -186,9 +186,11 @@ test('editor uploads and pastes images, persists them and supports removal and u
     (element, bytes) => {
       const data = new DataTransfer()
       data.items.add(new File([new Uint8Array(bytes)], 'clipboard.png', { type: 'image/png' }))
-      element.dispatchEvent(
-        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
-      )
+      if (data.files.length !== 1) throw Error('Clipboard fixture has no file')
+      // Firefox does not preserve supplied clipboardData in a synthetic ClipboardEvent.
+      const paste = new Event('paste', { bubbles: true, cancelable: true })
+      Object.defineProperty(paste, 'clipboardData', { value: data })
+      element.dispatchEvent(paste)
     },
     [...png],
   )
