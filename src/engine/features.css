@@ -1,0 +1,180 @@
+.tools-tabs,
+.study-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.study-actions {
+  justify-content: center;
+}
+.tools-tabs [aria-pressed='true'],
+.study-actions [aria-pressed='true'] {
+  outline: 2px solid var(--red-dark);
+  outline-offset: 2px;
+}
+.file-control {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.import-preview {
+  border: 2px solid var(--red-dark);
+  padding: 1rem;
+  border-radius: 0.6rem;
+}
+.template-dialog section > button {
+  margin: 0.3rem;
+}
+.template-dialog select,
+.template-dialog input:not([type='file']) {
+  padding: 0.6rem;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+}
+.template-dialog li {
+  margin: 0.5rem 0;
+}
+.search-hits {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 1rem;
+}
+.search-hits button {
+  text-align: left;
+}
+.editor-shell {
+  padding: clamp(1rem, 3vw, 3rem);
+  max-width: 1500px;
+  margin: auto;
+}
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(0, 3fr);
+  gap: 2rem;
+  margin-top: 2rem;
+}
+.editor-grid aside {
+  max-height: 80vh;
+  overflow: auto;
+  position: sticky;
+  top: 1rem;
+}
+.editor-shell label {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+.editor-shell input,
+.editor-shell select,
+.editor-shell textarea {
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+}
+.editor-shell input[type='checkbox'] {
+  width: auto;
+  justify-self: start;
+}
+.editor-shell textarea {
+  min-height: 6rem;
+}
+.editor-shell fieldset {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+.editor-preview {
+  container-type: inline-size;
+  aspect-ratio: 16/9;
+  min-width: 0;
+}
+.editor-preview .slide-frame {
+  height: 100%;
+}
+.editor-shell details {
+  margin: 1rem 0;
+}
+.editor-shell summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.timing-plan {
+  padding: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+.timing-plan label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.timing-plan input {
+  max-width: 5rem;
+}
+.search-hits .text-button {
+  margin: 0;
+}
+.error-screen {
+  max-width: 42rem;
+  margin: 10vh auto;
+  padding: 2rem;
+  font-family: system-ui;
+  line-height: 1.5;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #146dc2;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+  .editor-grid aside {
+    position: static;
+    max-height: 16rem;
+  }
+  .editor-header h1 {
+    font-size: 1.5rem;
+  }
+  .tools-tabs .button {
+    flex: 1 1 40%;
+  }
+  .catalog-header nav {
+    flex-wrap: wrap;
+  }
+  .deck-toolbar {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+@media print {
+  .study-actions {
+    display: none;
+  }
+}
