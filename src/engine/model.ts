@@ -16,9 +16,10 @@ export type Visual =
  | {type:'callouts';image:string;alt:string;items:{x:number;y:number;title:string;text:string}[];caption:string}
  | {type:'codeParts';parts:{code:string;label:string;explanation:string}[];caption:string}
 export type Task = {id:string;type:'single'|'multiple'|'short'|'matching';prompt:string;choose?:number;options?:Option[];items?:Option[]}
-export type Slide = {id:string;kind:'title'|'theory'|'notebook'|'process'|'comparison'|'example'|'warning'|'test'|'summary';title:string;kicker:string;body?:string;notebook?:string;bullets?:string[];visual?:Visual;steps?:{title:string;text:string}[];columns?:string[];rows?:string[][];task?:Task;source?:string}
+export type Reading = {citation:string;url?:string}
+export type Slide = {id:string;kind:'title'|'theory'|'notebook'|'process'|'comparison'|'example'|'warning'|'test'|'summary'|'literature'|'materials'|'section'|'questions';readingGroup?:'primary'|'additional';references?:Reading[];title:string;kicker:string;body?:string;notebook?:string;bullets?:string[];visual?:Visual;steps?:{title:string;text:string}[];columns?:string[];rows?:string[][];task?:Task;source?:string}
 export type Lecture = {id:string;title:string;sourceTitle:string;semester:number;question:string;slides:Slide[]}
-export type Course = {schemaVersion:1;contentVersion:string;id:string;code:string;discipline:string;year:string;heroTitle:string;heroAccent:string;slogan:string;mascot:string;mascotAlt:string;logo:string;ornament:string;font:string;materialsUrl:string;assessment?:{mode:'autonomous';url:string};demo:boolean;semesters:number[];lectures:Lecture[]}
+export type Course = {schemaVersion:1;contentVersion:string;id:string;code:string;discipline:string;year:string;heroTitle:string;heroAccent:string;slogan:string;mascot:string;mascotAlt:string;logo:string;ornament:string;font:string;materialsUrl:string;topicArrow?:string;literature?:{primary:Reading[];additional:Reading[]};assessment?:{mode:'autonomous';url:string};demo:boolean;semesters:number[];lectures:Lecture[]}
 export type Note = {script:string;preparation:string;notebook:string;questions:string;answer:string;estimatedSeconds:number}
 export type TeacherPack = {schemaVersion:1;courseId:string;contentVersion:string;notes:Record<string,Note>}
 export const emptyNote = ():Note => ({script:'',preparation:'',notebook:'',questions:'',answer:'',estimatedSeconds:120})
@@ -27,10 +28,14 @@ export function assetUrl(path:string,base:string){return safeUrl(path)||`${base}
 export function validateCourse(value:unknown): asserts value is Course {
  const c=value as Course
  if(!c||c.schemaVersion!==1||!c.id||!c.contentVersion||!c.code||!c.discipline||!Array.isArray(c.semesters)||!Array.isArray(c.lectures)||!c.lectures.length)throw Error('Некорректная конфигурация курса')
- const ids=new Set<string>(); const kinds=['title','theory','notebook','process','comparison','example','warning','test','summary']
+ const ids=new Set<string>(); const kinds=['title','theory','notebook','process','comparison','example','warning','test','summary','literature','materials','section','questions']
+ const checkReading=(entries:Reading[])=>{if(!Array.isArray(entries)||entries.some(e=>!e||typeof e.citation!=='string'||!e.citation.trim()||(e.url&&!safeUrl(e.url))))throw Error('Некорректная библиография')}
+ if(c.literature){checkReading(c.literature.primary);checkReading(c.literature.additional)}
  for(const l of c.lectures){if(!l.id||ids.has(l.id)||!c.semesters.includes(l.semester)||!Array.isArray(l.slides)||!l.slides.length)throw Error('Некорректная лекция');ids.add(l.id)
  for(const s of l.slides){if(!s.id||ids.has(s.id)||!s.title||!kinds.includes(s.kind))throw Error('Некорректный слайд');ids.add(s.id)
  if(s.task&&!['single','multiple','short','matching'].includes(s.task.type))throw Error('Неизвестный тип задания')
+ if(s.references)checkReading(s.references)
+ if(s.readingGroup&&!['primary','additional'].includes(s.readingGroup))throw Error('Неизвестная группа литературы')
  }}
  const walk=(v:unknown):void=>{if(v&&typeof v==='object'){for(const [k,x] of Object.entries(v)){if(['keys','answer','correctAnswer','correctIndexes','script','preparation','notes'].includes(k))throw Error('Приватные данные в публичном курсе');walk(x)}}};walk(c)
 }
