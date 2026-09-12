@@ -6,6 +6,7 @@ import { Modal } from './Modal'
 import { downloadJson, read, save } from './storage'
 import { applyBackup, exportBackup, prepareBackup } from './backup'
 import { offlineCommand } from './offline'
+import { useMobile } from './responsive'
 
 export function slideText(s: Slide) {
   const collect = (x: unknown): string =>
@@ -14,7 +15,10 @@ export function slideText(s: Slide) {
       : Array.isArray(x)
         ? x.map(collect).join(' ')
         : x && typeof x === 'object'
-          ? Object.values(x).map(collect).join(' ')
+          ? Object.entries(x)
+              .filter(([key]) => key !== 'src')
+              .map(([, value]) => collect(value))
+              .join(' ')
           : ''
   return collect(s).toLocaleLowerCase('ru')
 }
@@ -67,6 +71,7 @@ export function CourseTools({
   onGo: (lecture: string, slide: string) => void
 }) {
   const [tab, setTab] = useState('ready')
+  const mobile = useMobile()
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [checks, setChecks] = useState<string[]>([])
@@ -319,11 +324,11 @@ export function CourseTools({
           <label>
             Показать
             <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-              <option value="">Все отметки и ошибки</option>
+              <option value="">{mobile ? 'Все отметки' : 'Все отметки и ошибки'}</option>
               <option value="bookmark">Закладки</option>
               <option value="review">Повторить</option>
               <option value="done">Изучено</option>
-              <option value="errors">Ошибки самопроверки</option>
+              {!mobile && <option value="errors">Ошибки самопроверки</option>}
             </select>
           </label>
           <ul className="result-list">
@@ -331,7 +336,8 @@ export function CourseTools({
               l.slides
                 .filter((s) => {
                   const m = marks[s.id]
-                  const wrong = s.task && attempts[s.task.id]?.result?.status === 'incorrect'
+                  const wrong =
+                    !mobile && s.task && attempts[s.task.id]?.result?.status === 'incorrect'
                   return filter === 'errors'
                     ? wrong
                     : filter
@@ -343,7 +349,7 @@ export function CourseTools({
                     <button className="text-button" onClick={() => jump(s.id)}>
                       {l.title} · {s.title}
                     </button>
-                    {s.task && attempts[s.task.id]?.result?.status === 'incorrect' && (
+                    {!mobile && s.task && attempts[s.task.id]?.result?.status === 'incorrect' && (
                       <button
                         className="button ghost"
                         onClick={() => {
@@ -361,7 +367,9 @@ export function CourseTools({
                 )),
             )}
           </ul>
-          <p>Отметки ставятся под слайдом. Результаты сохраняются на этом устройстве.</p>
+          <p>
+            Отметки ставятся под слайдом.{!mobile && ' Результаты сохраняются на этом устройстве.'}
+          </p>
         </section>
       )}
       {tab === 'glossary' && (

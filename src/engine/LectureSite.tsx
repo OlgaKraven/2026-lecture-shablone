@@ -24,6 +24,8 @@ import type { Course, Lecture, Profile } from './model'
 import { assetUrl, safeUrl, TEMPLATE_VERSION } from './model'
 import { read, save } from './storage'
 import { Modal } from './Modal'
+import { useMobile } from './responsive'
+import { EditorLogin } from './EditorLogin'
 import { SlideView } from './SlideView'
 import { AssessmentProvider, AssessmentResults } from './Assessment'
 import './reference.css'
@@ -37,6 +39,8 @@ const CourseEditor = lazy(() => import('./CourseEditor'))
 const Teaching = lazy(() => import('./Teaching'))
 const blankProfile: Profile = { fullName: '', position: '', department: '' }
 export function LectureSite({ course, base = '/' }: { course: Course; base?: string }) {
+  const mobile = useMobile()
+  const [editorLoggedIn, setEditorLoggedIn] = useState(false)
   useEffect(() => {
     const focusButton = (e: MouseEvent) => {
       const button = (e.target as HTMLElement).closest('button')
@@ -200,10 +204,17 @@ export function LectureSite({ course, base = '/' }: { course: Course; base?: str
     theme === 'light' ? <Moon size={19} /> : <Sun size={19} />,
     () => setTheme(theme === 'light' ? 'dark' : 'light'),
   )
-  if (modal === 'editor')
+  if (modal === 'editor' && editorLoggedIn)
     return (
       <Suspense fallback={<p>Открываем редактор…</p>}>
-        <CourseEditor course={course} base={base} onClose={() => setModal('')} />
+        <CourseEditor
+          course={course}
+          base={base}
+          onClose={() => {
+            setEditorLoggedIn(false)
+            setModal('')
+          }}
+        />
       </Suspense>
     )
   if ((mode === 'presenter' || mode === 'audience') && lecture)
@@ -267,8 +278,8 @@ export function LectureSite({ course, base = '/' }: { course: Course; base?: str
               <button className="button ghost" onClick={() => setModal('tools')}>
                 Инструменты курса
               </button>
-              <button className="button ghost" onClick={() => setModal('editor')}>
-                Редактор курса
+              <button className="button ghost" onClick={() => setModal('login')}>
+                Вход
               </button>
               <button className="button ghost settings-button" onClick={() => setModal('settings')}>
                 <UserRound size={19} />
@@ -439,7 +450,8 @@ export function LectureSite({ course, base = '/' }: { course: Course; base?: str
               <button className="button ghost" onClick={() => setModal('tools')}>
                 Инструменты
               </button>
-              {icon('Результаты самопроверки', <BarChart3 size={19} />, () => setModal('results'))}
+              {!mobile &&
+                icon('Результаты самопроверки', <BarChart3 size={19} />, () => setModal('results'))}
               {icon(
                 animations ? 'Отключить анимацию' : 'Включить анимацию',
                 animations ? <Pause size={19} /> : <Play size={19} />,
@@ -561,6 +573,16 @@ export function LectureSite({ course, base = '/' }: { course: Course; base?: str
           {notice}
         </div>
       )}
+      {modal === 'login' && (
+        <EditorLogin
+          base={base}
+          onClose={() => setModal('')}
+          onLogin={() => {
+            setEditorLoggedIn(true)
+            setModal('editor')
+          }}
+        />
+      )}
       {modal === 'tools' && (
         <CourseTools
           course={course}
@@ -626,7 +648,7 @@ export function LectureSite({ course, base = '/' }: { course: Course; base?: str
           </button>
         </Modal>
       )}
-      {modal === 'results' && lecture && (
+      {!mobile && modal === 'results' && lecture && (
         <Modal title="Самопроверка" onClose={() => setModal('')}>
           <AssessmentResults
             lecture={lecture}

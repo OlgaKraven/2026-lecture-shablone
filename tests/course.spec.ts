@@ -1,4 +1,6 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+import { pbkdf2Sync } from 'node:crypto'
+import { PNG } from 'pngjs'
 import { readFileSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { resolve, extname, sep } from 'node:path'
@@ -11,6 +13,26 @@ test.beforeEach(async ({ page }) => {
 const course = JSON.parse(readFileSync('public/course.json', 'utf8'))
 const first = course.lectures[0]
 const taskSlide = first.slides.find((s: any) => s.task?.type === 'single')
+const testLogin = { username: 'test-editor', password: 'fixture-only-editor-password' }
+async function openEditor(page: Page) {
+  await page.route('**/editor-access.json', (route) =>
+    route.fulfill({
+      json: {
+        username: testLogin.username,
+        salt: Buffer.from('editor-test-salt').toString('base64'),
+        iterations: 210000,
+        verifier: pbkdf2Sync(testLogin.password, 'editor-test-salt', 210000, 32, 'sha256').toString(
+          'base64',
+        ),
+      },
+    }),
+  )
+  await page.getByRole('button', { name: 'Вход', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Логин', exact: true }).fill(testLogin.username)
+  await page.getByLabel('Пароль', { exact: true }).fill(testLogin.password)
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Редактор курса', exact: true })).toBeVisible()
+}
 test('search finds slide body and direct link restores slide', async ({ page }) => {
   await page.goto('./')
   const s = first.slides.find((s: any) => s.body && s.body.length > 30)
@@ -49,7 +71,7 @@ test('assessment handles wrong answer, retry, correct answer and reload', async 
 })
 test('editor autosaves, undo restores and preview renders', async ({ page }) => {
   await page.goto('./')
-  await page.getByRole('button', { name: 'Редактор курса', exact: true }).click()
+  await openEditor(page)
   const title = page.getByRole('textbox', { name: 'Заголовок слайда', exact: true })
   const before = await title.inputValue()
   await title.fill('Новый проверочный заголовок')
@@ -61,11 +83,123 @@ test('editor autosaves, undo restores and preview renders', async ({ page }) => 
   await title.fill('Восстановленный черновик')
   await expect(page.getByRole('status').first()).toContainText('Черновик сохранён')
   await page.reload()
-  await page.getByRole('button', { name: 'Редактор курса', exact: true }).click()
+  await openEditor(page)
   await expect(page.getByRole('textbox', { name: 'Заголовок слайда', exact: true })).toHaveValue(
     'Восстановленный черновик',
   )
 })
+test('editor login rejects wrong credentials and closing requires login again', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await expect(page.getByRole('button', { name: 'Редактор курса', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Вход', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Логин', exact: true }).fill('wrong-user')
+  await page.getByLabel('Пароль', { exact: true }).fill('wrong-password')
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Неверный логин или пароль')
+  await expect(page.locator('.editor-shell')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Закрыть окно' }).click()
+  await openEditor(page)
+  await page.getByRole('button', { name: 'Закрыть редактор' }).click()
+  await page.getByRole('button', { name: 'Вход', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Вход в редактор' })).toBeVisible()
+  await expect(page.locator('.editor-shell')).toHaveCount(0)
+})
+
+test('presentation deletion confirms, persists and undo restores slides and references', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await openEditor(page)
+  const lectures = page.getByRole('combobox', { name: 'Лекция', exact: true })
+  const count = await lectures.locator('option').count()
+  const initial = await lectures.inputValue()
+  page.once('dialog', (d) => d.dismiss())
+  await page.getByRole('button', { name: 'Удалить презентацию', exact: true }).click()
+  await expect(lectures.locator('option')).toHaveCount(count)
+  page.once('dialog', (d) => d.accept())
+  await page.getByRole('button', { name: 'Удалить презентацию', exact: true }).click()
+  await expect(lectures.locator('option')).toHaveCount(count - 1)
+  const draftKey = `lecture:/2026-lecture-shablone/:${course.id}:editor:${course.contentVersion}`
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key)!).present.course.lectures.length,
+        draftKey,
+      ),
+    )
+    .toBe(count - 1)
+  const draft = await page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key)!).present,
+    draftKey,
+  )
+  const removedIds = first.slides.map((s: any) => s.id)
+  expect(
+    draft.course.glossary
+      ?.flatMap((x: any) => x.slideIds)
+      .some((id: string) => removedIds.includes(id)),
+  ).toBeFalsy()
+  await page.reload()
+  await openEditor(page)
+  await expect(lectures.locator('option')).toHaveCount(count - 1)
+  const exported = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Проверить и скачать курс', exact: true }).click()
+  const deletedCourse = JSON.parse(readFileSync((await (await exported).path())!, 'utf8'))
+  expect(deletedCourse.lectures.some((l: any) => l.id === initial)).toBe(false)
+  await page.getByRole('button', { name: 'Отменить', exact: true }).click()
+  await expect(lectures.locator('option')).toHaveCount(count)
+  await expect(lectures).toHaveValue(initial)
+})
+
+test('editor uploads and pastes images, persists them and supports removal and undo', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await openEditor(page)
+  const raster = new PNG({ width: 120, height: 80 })
+  raster.data.fill(180)
+  const png = PNG.sync.write(raster)
+  await page
+    .getByLabel('Загрузить изображение', { exact: true })
+    .setInputFiles({ name: 'screenshot.png', mimeType: 'image/png', buffer: png })
+  await expect(page.locator('.image-editor-preview')).toBeVisible()
+  await page.getByLabel('Описание изображения', { exact: true }).fill('Проверочный скриншот')
+  await page.getByLabel('Подпись к изображению', { exact: true }).fill('Подпись скриншота')
+  await page.getByRole('button', { name: 'Предпросмотр слайда', exact: true }).click()
+  await expect(page.locator('.editor-preview').getByAltText('Проверочный скриншот')).toBeVisible()
+  await expect(page.locator('.editor-preview figcaption')).toHaveText('Подпись скриншота')
+  await expect(page.getByRole('status').first()).toContainText('Черновик сохранён')
+  await page.reload()
+  await openEditor(page)
+  await expect(page.locator('.image-editor-preview')).toHaveAttribute('alt', 'Проверочный скриншот')
+  const exported = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Проверить и скачать курс', exact: true }).click()
+  const imageCourse = JSON.parse(readFileSync((await (await exported).path())!, 'utf8'))
+  expect(imageCourse.lectures[0].slides[0].image.src).toMatch(/^data:image\/(webp|png);base64,/)
+  await page.getByRole('button', { name: 'Удалить изображение', exact: true }).click()
+  await expect(page.locator('.image-editor-preview')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Отменить', exact: true }).click()
+  await expect(page.locator('.image-editor-preview')).toBeVisible()
+  await page.getByRole('button', { name: 'Удалить изображение', exact: true }).click()
+  await page.locator('.image-paste').evaluate(
+    (element, bytes) => {
+      const data = new DataTransfer()
+      data.items.add(new File([new Uint8Array(bytes)], 'clipboard.png', { type: 'image/png' }))
+      element.dispatchEvent(
+        new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+      )
+    },
+    [...png],
+  )
+  await expect(page.locator('.image-editor-preview')).toBeVisible()
+  await page
+    .getByLabel('Загрузить изображение', { exact: true })
+    .setInputFiles({ name: 'bad.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') })
+  await expect(page.getByRole('alert')).toContainText('Выберите PNG, JPEG или WebP')
+  await expect(page.locator('.image-editor-preview')).toBeVisible()
+})
+
 test('course fetch failure has retry', async ({ page }) => {
   let fail = true
   await page.route('**/course.json', (route) =>
@@ -75,7 +209,7 @@ test('course fetch failure has retry', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Курс не загрузился' })).toBeVisible()
   fail = false
   await page.getByRole('button', { name: 'Повторить загрузку' }).click()
-  await expect(page.getByRole('button', { name: 'Редактор курса' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Вход', exact: true })).toBeVisible()
 })
 test('backup export and restore preview excludes teacher notes', async ({ page }) => {
   await page.goto('./')
@@ -171,7 +305,7 @@ test('offline course reloads and lazy teaching module opens without network', as
     })
     await expect(fetch(origin)).rejects.toThrow()
     await page.reload()
-    await expect(page.getByRole('button', { name: 'Редактор курса' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Вход', exact: true })).toBeVisible()
     await page.goto(`${origin}?lecture=${first.id}&slide=${first.slides[0].id}`)
     await page.getByRole('button', { name: 'Начать занятие в двух окнах', exact: true }).click()
     await expect(
@@ -227,7 +361,7 @@ test('catalog, tools and editor have no serious accessibility violations', async
       await page.getByRole('button', { name: 'Инструменты курса', exact: true }).click()
     if (view === 'editor') {
       await page.keyboard.press('Escape')
-      await page.getByRole('button', { name: 'Редактор курса', exact: true }).click()
+      await openEditor(page)
     }
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -240,11 +374,11 @@ test('catalog, tools and editor have no serious accessibility violations', async
 })
 test('invalid unfinished editor text survives reload', async ({ page }) => {
   await page.goto('./')
-  await page.getByRole('button', { name: 'Редактор курса', exact: true }).click()
+  await openEditor(page)
   await page.getByRole('textbox', { name: 'Заголовок слайда', exact: true }).fill('')
   await expect(page.getByRole('status').first()).toContainText('Черновик сохранён')
   await page.reload()
-  await page.getByRole('button', { name: 'Редактор курса', exact: true }).click()
+  await openEditor(page)
   await expect(page.getByRole('textbox', { name: 'Заголовок слайда', exact: true })).toHaveValue('')
   await page.getByRole('button', { name: 'Проверить и скачать курс', exact: true }).click()
   await expect(page.getByRole('status').last()).toContainText('title')
@@ -281,7 +415,9 @@ test('teacher pack previews migration and break pauses timer', async ({ page }) 
   await expect(page.getByRole('button', { name: 'Продолжить таймер', exact: true })).toBeVisible()
   await expect(page.locator('.timing-plan')).toContainText('До конца перерыва')
 })
-test('mobile never renders answer breakdown, including after desktop resize', async ({ page }) => {
+test('mobile hides answers, results and retries after submit, resize and reload', async ({
+  page,
+}) => {
   await page.goto(`./?lecture=${first.id}&slide=${taskSlide.id}`)
   await page.getByRole('radio').first().check()
   await page.getByRole('button', { name: 'Проверить', exact: true }).click()
@@ -290,12 +426,35 @@ test('mobile never renders answer breakdown, including after desktop resize', as
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(page.getByRole('heading', { name: 'Правильный ответ' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Разбор ответа', exact: true })).toHaveCount(0)
-  await expect(page.locator('.task-status')).toContainText('Есть ошибка')
+  await expect(page.locator('.task-status')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Ещё попытка' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Результаты самопроверки' })).toHaveCount(0)
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.getByRole('button', { name: 'Закрыть окно' }).click()
   await page.getByRole('button', { name: 'Результаты самопроверки' }).click()
-  await expect(page.getByRole('dialog')).not.toContainText('Правильный ответ')
-  await expect(page.getByRole('dialog').locator('details')).toHaveCount(0)
+  await expect(page.locator('.result-summary')).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.reload()
+  await expect(page.locator('.task-status, .result-summary')).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: /Ещё попытка|Начать самопроверку заново/ }),
+  ).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Разбор ответа', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Инструменты', exact: true }).click()
+  await page.getByRole('button', { name: 'Моё обучение', exact: true }).click()
+  await expect(page.locator('option[value="errors"]')).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Повторить объяснение перед заданием' }),
+  ).toHaveCount(0)
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.getByRole('radio').first().check()
+  await page.getByRole('button', { name: 'Проверить', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Ответ сохранён')
+  await expect(page.locator('.task-status')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Ещё попытка' })).toHaveCount(0)
+  await expect(page.getByRole('radio').first()).toBeDisabled()
 })
 test('all diagrams fit SVG bounds and mobile reading stays within viewport', async ({
   page,

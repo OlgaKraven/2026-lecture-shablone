@@ -224,7 +224,7 @@ export function TaskView({ task: t }: { task: Task }) {
       <div className="task-actions">
         {ctx.readonly ? (
           <>
-            {done && (
+            {!mobile && done && (
               <span className={`task-status ${a!.result!.status}`}>
                 {a!.result!.status === 'correct' ? 'Правильно' : 'Есть ошибка'} ·{' '}
                 {a!.result!.score.toLocaleString('ru-RU')} / 1
@@ -239,6 +239,8 @@ export function TaskView({ task: t }: { task: Task }) {
           >
             {ctx.busy === t.id ? 'Проверяем…' : 'Проверить'}
           </button>
+        ) : mobile ? (
+          <span role="status">Ответ сохранён</span>
         ) : (
           <>
             <span className={`task-status ${a!.result!.status}`} role="status">
@@ -297,6 +299,7 @@ export function AssessmentResults({
   const mobile = useMobile()
   const ctx = useContext(AssessmentContext)!
   const [confirm, setConfirm] = useState(false)
+  if (mobile) return null
   const tasks = lecture.slides.map((s, index) => ({ task: s.task, index })).filter((x) => x.task)
   const correct = tasks.filter((x) => ctx.attempts[x.task!.id]?.result?.status === 'correct').length
   const wrong = tasks.filter((x) => ctx.attempts[x.task!.id]?.result?.status === 'incorrect').length

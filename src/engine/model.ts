@@ -95,6 +95,7 @@ export type Slide = {
   notebook?: string
   bullets?: string[]
   visual?: Visual
+  image?: { src: string; alt: string; caption?: string }
   steps?: { title: string; text: string }[]
   columns?: string[]
   rows?: string[][]

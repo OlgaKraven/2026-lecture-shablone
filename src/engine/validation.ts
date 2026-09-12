@@ -285,6 +285,17 @@ export function validateStructure(value: unknown): asserts value is Course {
         if (s[k] !== undefined) str(s[k], q + '.' + k, true)
       if (s.bullets) texts(s.bullets, q + '.bullets')
       if (s.visual) visual(s.visual, q + '.visual')
+      if (s.image !== undefined) {
+        const image = obj(s.image, q + '.image')
+        const src = str(image.src, q + '.image.src')
+        if (
+          src.length > 1500000 ||
+          !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(src)
+        )
+          fail(q + '.image.src', 'нужно встроенное PNG, JPEG или WebP до 1 МБ')
+        str(image.alt, q + '.image.alt')
+        if (image.caption !== undefined) str(image.caption, q + '.image.caption', true)
+      }
       if (s.references) reading(s.references, q + '.references')
       if (s.readingGroup) choice(s.readingGroup, q + '.readingGroup', ['primary', 'additional'])
       if (s.steps)

@@ -8,6 +8,7 @@ import {
   courseAssets,
 } from '../src/engine/validation.ts'
 import { exportBackup, prepareBackup, applyBackup } from '../src/engine/backup.ts'
+import { packEditorHistory, unpackEditorHistory } from '../src/engine/editor-history.ts'
 const course = JSON.parse(readFileSync('public/course.json', 'utf8'))
 const bank = JSON.parse(readFileSync('public/assessment.json', 'utf8'))
 const memory = () => {
@@ -29,6 +30,38 @@ test('demo validates all visual variants and answer bank', () => {
   )
   assert.ok(courseAssets(course).includes(course.font))
 })
+test('editor history stores repeated images once and restores losslessly', () => {
+  const src = 'data:image/png;base64,aGVsbG8='
+  const history = {
+    past: [{ image: { src, alt: 'before' } }],
+    present: { image: { src, alt: 'after' } },
+    future: [],
+  }
+  const packed = packEditorHistory(history)
+  assert.deepEqual(packed.imageStore, [src])
+  assert.deepEqual(unpackEditorHistory(packed), history)
+  assert.deepEqual(unpackEditorHistory(history), history)
+  assert.throws(
+    () => unpackEditorHistory({ present: { src: 'editor-image:2' }, imageStore: [] }),
+    /Повреждённое/,
+  )
+})
+
+test('slide images accept embedded raster and reject active content and oversized data', () => {
+  const c = structuredClone(course)
+  const s = c.lectures[0].slides[0]
+  s.image = { src: 'data:image/png;base64,aGVsbG8=', alt: 'Описание', caption: 'Подпись' }
+  validateStructure(c)
+  for (const src of [
+    'javascript:alert(1)',
+    'data:image/svg+xml;base64,aGVsbG8=',
+    'data:image/png;base64,' + 'A'.repeat(1500000),
+  ]) {
+    s.image.src = src
+    assert.throws(() => validateStructure(c), /image.src/)
+  }
+})
+
 test('invalid nested visual reports exact lecture and slide', () => {
   const c = structuredClone(course)
   const l = c.lectures.find((l) => l.slides.some((s) => s.visual?.type === 'network'))

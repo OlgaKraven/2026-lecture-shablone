@@ -5,6 +5,8 @@ import { validateBank } from './validation'
 import type { Key } from './scoring'
 import { downloadJson, read, save } from './storage'
 import { SlideView } from './SlideView'
+import { ImageEditor } from './ImageEditor'
+import { packEditorHistory, unpackEditorHistory } from './editor-history'
 
 type Draft = { course: Course; keys: Record<string, Key> }
 type History = { past: Draft[]; present: Draft; future: Draft[] }
@@ -20,8 +22,8 @@ export default function CourseEditor({
 }) {
   const storageKey = `lecture:${base}:${course.id}:editor:${course.contentVersion}`
   const [history, setHistory] = useState<History>(() => {
-    const h = read<History | null>(storageKey, null)
     try {
+      const h = unpackEditorHistory(read<History | null>(storageKey, null))
       if (h) {
         if (
           h.present.course.id !== course.id ||
@@ -70,7 +72,7 @@ export default function CourseEditor({
     })
   useEffect(() => {
     const timer = setTimeout(() => {
-      const ok = save(storageKey, history)
+      const ok = save(storageKey, packEditorHistory(history))
       setSaved(ok)
       if (!ok) setNotice('Автосохранение недоступно. Скачайте черновик перед закрытием.')
     }, 400)
@@ -97,10 +99,24 @@ export default function CourseEditor({
       .then((bank) => {
         validateBank(bank, course)
         if (active)
-          setHistory((h) => ({
-            ...h,
-            present: { ...h.present, keys: { ...bank.keys, ...h.present.keys } },
-          }))
+          setHistory((h) => {
+            const tasks = new Set(
+              h.present.course.lectures.flatMap((l) =>
+                l.slides.flatMap((s) => (s.task ? [s.task.id] : [])),
+              ),
+            )
+            return {
+              ...h,
+              present: {
+                ...h.present,
+                keys: Object.fromEntries(
+                  Object.entries({ ...bank.keys, ...h.present.keys }).filter(([id]) =>
+                    tasks.has(id),
+                  ),
+                ) as Record<string, Key>,
+              },
+            }
+          })
       })
       .catch((e) => active && setNotice(String(e)))
     return () => {
@@ -595,6 +611,44 @@ export default function CourseEditor({
           >
             Добавить лекцию
           </button>
+          <button
+            className="button ghost"
+            disabled={d.course.lectures.length === 1}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Удалить презентацию «${l.title}» и все её слайды? Удаление можно отменить.`,
+                )
+              )
+                return
+              const slides = new Set(l.slides.map((s) => s.id))
+              const tasks = new Set(l.slides.flatMap((s) => (s.task ? [s.task.id] : [])))
+              commit({
+                keys: Object.fromEntries(Object.entries(d.keys).filter(([id]) => !tasks.has(id))),
+                course: {
+                  ...d.course,
+                  lectures: d.course.lectures.filter((x) => x.id !== l.id),
+                  glossary: d.course.glossary?.map((x) => ({
+                    ...x,
+                    slideIds: x.slideIds.filter((id) => !slides.has(id)),
+                  })),
+                  curriculum: d.course.curriculum?.map((x) => ({
+                    ...x,
+                    slideIds: x.slideIds.filter((id) => !slides.has(id)),
+                    taskIds: x.taskIds.filter((id) => !tasks.has(id)),
+                  })),
+                },
+              })
+              setLi(0)
+              setSi(0)
+              setNotice('Презентация удалена из черновика. Кнопка «Отменить» восстановит её.')
+            }}
+          >
+            Удалить презентацию
+          </button>
+          {d.course.lectures.length === 1 && (
+            <p>В курсе должна остаться хотя бы одна презентация.</p>
+          )}
           <ol className="toc-list">
             {l.slides.map((s, i) => (
               <li key={s.id}>
@@ -717,6 +771,11 @@ export default function CourseEditor({
               onChange={(e) => updateSlide({ notebook: e.target.value })}
             />
           </label>
+          <ImageEditor
+            key={slide.id}
+            image={slide.image}
+            onChange={(image) => updateSlide({ image })}
+          />
           <div className="tools-tabs">
             <button
               className="button ghost"
