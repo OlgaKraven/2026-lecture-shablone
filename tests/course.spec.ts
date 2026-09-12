@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { readFileSync, mkdirSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { resolve, extname, sep } from 'node:path'
 import AxeBuilder from '@axe-core/playwright'
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (e) => console.log('PAGE ERROR', String(e)))
@@ -121,30 +123,64 @@ test('two windows sync, restore audience and keep notes private', async ({ page,
   await page.getByRole('button', { name: 'Открыть аудиторию', exact: true }).click()
   await expect.poll(() => context.pages().length).toBe(2)
 })
-test('offline course reloads and lazy teaching module opens without network', async ({
-  page,
-  context,
-  browserName,
-}) => {
-  test.skip(
-    browserName === 'webkit' && process.platform === 'win32',
-    'Windows Playwright WebKit returns an internal navigation error in offline emulation; covered in Linux CI.',
-  )
-  await page.goto('./')
-  await page.getByRole('button', { name: 'Инструменты курса', exact: true }).click()
-  await page.getByRole('button', { name: 'Скачать курс для офлайн', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('Курс доступен без интернета', {
-    timeout: 30000,
+test('offline course reloads and lazy teaching module opens without network', async ({ page }) => {
+  // Shut down the actual origin: Playwright's WebKit offline emulation fails before SW dispatch.
+  const root = resolve('dist')
+  const types: Record<string, string> = {
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
+    '.json': 'application/json',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+    '.woff2': 'font/woff2',
+  }
+  const server = createServer((request, response) => {
+    try {
+      const path = new URL(request.url!, 'http://localhost').pathname.replace(
+        /^\/2026-lecture-shablone\//,
+        '',
+      )
+      const file = resolve(root, path || 'index.html')
+      if (!file.startsWith(root + sep)) throw Error('invalid path')
+      response.writeHead(200, {
+        'Content-Type': types[extname(file)] || 'application/octet-stream',
+      })
+      response.end(readFileSync(file))
+    } catch {
+      response.writeHead(404)
+      response.end()
+    }
   })
-  await context.setOffline(true)
-  await page.reload()
-  await expect(page.getByRole('button', { name: 'Редактор курса' })).toBeVisible()
-  await page.goto(`./?lecture=${first.id}&slide=${first.slides[0].id}`)
-  await page.getByRole('button', { name: 'Начать занятие в двух окнах', exact: true }).click()
-  await expect(
-    page.getByRole('heading', { name: first.title, exact: true, level: 1 }),
-  ).toBeVisible()
-  await context.setOffline(false)
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+  const address = server.address() as { port: number }
+  const origin = `http://127.0.0.1:${address.port}/2026-lecture-shablone/`
+  try {
+    await page.goto(origin)
+    await page.getByRole('button', { name: 'Инструменты курса', exact: true }).click()
+    await page.getByRole('button', { name: 'Скачать курс для офлайн', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('Курс доступен без интернета', {
+      timeout: 30000,
+    })
+    await expect
+      .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+      .toBe(true)
+    await new Promise<void>((done) => {
+      server.close(() => done())
+      server.closeAllConnections()
+    })
+    await expect(fetch(origin)).rejects.toThrow()
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Редактор курса' })).toBeVisible()
+    await page.goto(`${origin}?lecture=${first.id}&slide=${first.slides[0].id}`)
+    await page.getByRole('button', { name: 'Начать занятие в двух окнах', exact: true }).click()
+    await expect(
+      page.getByRole('heading', { name: first.title, exact: true, level: 1 }),
+    ).toBeVisible()
+  } finally {
+    server.closeAllConnections()
+    server.close()
+  }
 })
 test('mobile tools fit viewport and dialog Escape returns focus', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
@@ -232,13 +268,11 @@ test('teacher pack previews migration and break pauses timer', async ({ page }) 
       },
     },
   }
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({
-      name: 'notes.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(pack)),
-    })
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'notes.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(pack)),
+  })
   await expect(page.getByRole('heading', { name: 'Импорт сценария' })).toBeVisible()
   await expect(page.locator('.import-preview')).toContainText('другой версии')
   await page.getByRole('button', { name: 'Применить заметки' }).click()
