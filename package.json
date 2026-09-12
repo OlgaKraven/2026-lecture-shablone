@@ -1,17 +1,21 @@
 {
   "name": "@olgakraven/lecture-engine",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -b",
-    "build": "tsc -b && vite build",
-    "build:engine": "vite build --config vite.engine.config.ts && tsc --ignoreConfig src/engine/index.ts --declaration --emitDeclarationOnly --outDir lib --jsx react-jsx --moduleResolution bundler --module esnext --target es2023 --skipLibCheck --types vite/client && node scripts/finalize-types.mjs",
+    "build": "tsc -b && vite build && node scripts/build-offline.mjs",
+    "build:engine": "vite build --config vite.engine.config.ts && tsc --ignoreConfig src/engine/index.ts --rewriteRelativeImportExtensions --declaration --emitDeclarationOnly --outDir lib --jsx react-jsx --moduleResolution bundler --module esnext --target es2023 --skipLibCheck --types vite/client && node scripts/finalize-types.mjs",
     "preview": "vite preview",
-    "validate:content": "node --experimental-strip-types scripts/validate-content.mjs",
+    "validate:content": "node scripts/validate-content.mjs && node scripts/readiness.mjs",
     "test:session": "node --experimental-strip-types --test scripts/session.test.mjs",
-    "check:privacy": "node scripts/check-privacy.mjs"
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "test:unit": "node --test scripts/session.test.mjs scripts/features.test.mjs",
+    "test:e2e": "playwright test",
+    "check:readiness": "node scripts/readiness.mjs",
+    "lint": "oxlint src scripts"
   },
   "dependencies": {
     "lucide-react": "^1.38.0",
@@ -21,6 +25,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.62.1",
     "@types/node": "^24.13.3",
     "@types/pngjs": "^6.0.5",
@@ -33,6 +38,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.3.289",
     "pngjs": "^7.0.0",
+    "prettier": "^3.9.6",
     "sharp": "^0.35.4",
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
@@ -51,5 +57,6 @@
     "public/brand",
     "public/fonts"
   ],
-  "types": "./lib/index.d.ts"
+  "types": "./lib/index.d.ts",
+  "license": "MIT"
 }

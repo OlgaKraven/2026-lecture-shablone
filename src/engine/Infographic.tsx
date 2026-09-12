@@ -1,20 +1,101 @@
-import {useId} from 'react'
-import type {Visual} from './model'
-import {ExtendedInfographic} from './ExtendedInfographic'
-const palette=['#DE040D','#4561C8','#1C8D00','#66758A','#9A7079']
-function lines(s:string,max=23){const out:string[]=[];let line='';for(const word of s.split(' ')){if((line+' '+word).trim().length>max&&line){out.push(line);line=word}else line=(line+' '+word).trim()}if(line)out.push(line);return out}
-function Label({text,x,y,size=22,width=23,bold=false}:{text:string;x:number;y:number;size?:number;width?:number;bold?:boolean}){return <text x={x} y={y} textAnchor="middle" fontSize={size} fill="#1c1c1c" fontWeight={bold?750:450}>{lines(text,width).map((line,i)=><tspan key={i} x={x} dy={i?size*1.35:0}>{line}</tspan>)}</text>}
-export function Infographic({visual:v,base='/'}:{visual:Visual;base?:string}){
- const marker=useId().replace(/:/g,'');const W=1040;const H=v.type==='tree'?410:['process','timeline','network','bars'].includes(v.type)?350:400
- let shape
- if(v.type==='process'||v.type==='timeline'){const gap=36;const width=(W-40-gap*(v.items.length-1))/v.items.length;shape=<>{v.type==='timeline'&&<line x1="50" y1="58" x2="990" y2="58" stroke="#d4d5da" strokeWidth="5"/>}{v.items.map((item,i)=>{const x=20+i*(width+gap);return <g key={i}>
- {v.type==='process'&&i<v.items.length-1&&<path d={`M ${x+width+5} 145 h ${gap-15}`} fill="none" stroke="#66758a" strokeWidth="3" markerEnd={`url(#${marker})`}/>}
- <rect x={x} y={v.type==='timeline'?95:72} width={width} height={v.type==='timeline'?195:235} rx="13" fill="#f5f5f7" stroke="#d4d5da"/>
- <rect x={x} y={v.type==='timeline'?95:72} width={width} height="5" rx="2" fill={palette[i%5]}/>
- <circle cx={x+width/2} cy={v.type==='timeline'?58:34} r="25" fill={palette[i%5]}/><text x={x+width/2} y={v.type==='timeline'?66:42} textAnchor="middle" fontSize="22" fontWeight="800" fill="white">{i+1}</text>
- <Label text={item.title} x={x+width/2} y={v.type==='timeline'?135:115} bold width={Math.round(width/13)}/><Label text={item.text} x={x+width/2} y={v.type==='timeline'?188:180} size={21} width={Math.round(width/12)}/></g>})}</>}
- else if(v.type==='tree'){const width=960/v.branches.length;shape=<><rect x="330" y="5" width="380" height="65" rx="12" fill="#1c1c1c"/><text x="520" y="46" textAnchor="middle" fontSize="26" fontWeight="750" fill="white">{v.root}</text><path d="M 520 70 V 100" stroke="#66758a" strokeWidth="3"/>{v.branches.map((b,i)=>{const x=40+i*width;const cx=x+width/2;return <g key={i}><path d={`M 520 100 H ${cx} V 134`} fill="none" stroke={palette[i%5]} strokeWidth="3" markerEnd={`url(#${marker})`}/><rect x={x+12} y="142" width={width-24} height="60" rx="10" fill="#f4f4f6" stroke={palette[i%5]} strokeWidth="2"/><Label text={b.title} x={cx} y={179} bold/>{b.items.map((item,j)=><g key={j}><path d={`M ${x+25} 204 V ${243+j*70} H ${x+45}`} fill="none" stroke={palette[i%5]} strokeWidth="2"/><rect x={x+45} y={218+j*70} width={width-60} height="56" rx="8" fill="#fff" stroke="#d4d5da"/><Label text={item} x={x+width/2+15} y={253+j*70} size={20}/></g>)}</g>})}</>}
- else if(v.type==='network'){const positions=v.nodes.map((_,i)=>({x:25+i*(1000/v.nodes.length),y:108,w:1000/v.nodes.length-62}));shape=<>{v.edges.map((edge,i)=>{const a=positions[v.nodes.findIndex(n=>n.id===edge.from)];const b=positions[v.nodes.findIndex(n=>n.id===edge.to)];if(!a||!b)return null;return <g key={i}><path d={`M ${a.x+a.w} 176 H ${b.x-10}`} stroke="#66758a" strokeWidth="3" fill="none" markerEnd={`url(#${marker})`}/><Label text={edge.label} x={(a.x+a.w+b.x)/2} y={80} size={19} width={12}/></g>})}{v.nodes.map((n,i)=>{const p=positions[i];return <g key={n.id}><rect x={p.x} y={p.y} width={p.w} height="172" rx="12" fill="#fff" stroke={palette[i%5]} strokeWidth="3"/><Label text={n.title} x={p.x+p.w/2} y={155} bold width={Math.round(p.w/14)}/><Label text={n.text} x={p.x+p.w/2} y={216} size={20} width={Math.round(p.w/12)}/></g>})}</>}
- else if(v.type==='bars'){const left=250;const width=690;shape=<>{[0,.25,.5,.75,1].map(f=><g key={f}><line x1={left+width*f} y1="35" x2={left+width*f} y2="285" stroke="#e0e1e5" strokeDasharray="4 4"/><text x={left+width*f} y="322" textAnchor="middle" fontSize="21" fill="#555">{Number((v.max*f).toFixed(2))}</text></g>)}{v.items.map((item,i)=><g key={item.label}><text x={left-22} y={87+i*85} textAnchor="end" fontSize="24" fill="#1c1c1c">{item.label}</text><rect x={left} y={55+i*85} width={Math.max(0,item.value/v.max*width)} height="48" rx="6" fill={palette[i%5]}/><text x={left+item.value/v.max*width+12} y={87+i*85} fontSize="24" fill="#1c1c1c" fontWeight="800">{item.value}</text></g>)}{v.threshold!==undefined&&<g><line x1={left+v.threshold/v.max*width} y1="27" x2={left+v.threshold/v.max*width} y2="285" stroke="#1c1c1c" strokeWidth="2" strokeDasharray="7 5"/><text x={left+v.threshold/v.max*width+10} y="25" fontSize="20" fill="#1c1c1c">Критерий: {v.threshold} {v.unit}</text></g>}<text x="1000" y="322" textAnchor="end" fontSize="21" fill="#555">{v.unit}</text></>}
- return <figure className={`infographic infographic-${v.type}`}><svg role="img" aria-label={v.caption} viewBox={`0 0 ${W} ${H}`} xmlns="http://www.w3.org/2000/svg"><defs><marker id={marker} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8" fill="#66758a"/></marker></defs>{shape||<ExtendedInfographic visual={v} marker={marker} base={base}/>}</svg><figcaption>{v.caption}</figcaption></figure>
+import { createContext, useContext, useId, useState } from 'react'
+import { createPortal } from 'react-dom'
+import type { Visual } from './model'
+import { diagramLayout } from './diagram-layout'
+import { InfographicMobile } from './InfographicMobile'
+import { Modal } from './Modal'
+export type DiagramView = 'diagram' | 'text' | null
+export const DiagramControl = createContext<{
+  view: DiagramView
+  setView: (view: DiagramView) => void
+} | null>(null)
+export function Infographic({ visual, base = '/' }: { visual: Visual; base?: string }) {
+  const id = useId().replace(/:/g, '')
+  const [localView, setLocalView] = useState<DiagramView>(null)
+  const control = useContext(DiagramControl)
+  const view = control ? control.view : localView
+  const setView = control ? control.setView : setLocalView
+  const layout = diagramLayout(visual, id, base)
+  const canvas = (suffix: string) => {
+    const marker = id + suffix
+    const l = suffix ? diagramLayout(visual, marker, base) : layout
+    return (
+      <svg
+        role="img"
+        aria-labelledby={`${marker}-title ${marker}-desc`}
+        viewBox={`0 0 1040 ${l.height}`}
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <title id={`${marker}-title`}>{visual.caption}</title>
+        <desc id={`${marker}-desc`}>
+          Текстовое представление доступно внутри окна «Рассмотреть схему».
+        </desc>
+        <defs>
+          <marker
+            id={marker}
+            markerWidth="8"
+            markerHeight="8"
+            refX="7"
+            refY="4"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0 L8 4 L0 8" fill="#6B778B" />
+          </marker>
+        </defs>
+        {l.content}
+      </svg>
+    )
+  }
+  return (
+    <figure className={`infographic infographic-${visual.type}`}>
+      <div className="infographic-canvas">{canvas('')}</div>
+      <div className="infographic-mobile">
+        <InfographicMobile visual={visual} base={base} />
+      </div>
+      <figcaption>{visual.caption}</figcaption>
+      <div className="infographic-actions">
+        <button
+          className="diagram-open-button"
+          aria-haspopup="dialog"
+          onClick={() => setView('diagram')}
+        >
+          Рассмотреть схему
+        </button>
+      </div>
+      {view &&
+        createPortal(
+          <Modal
+            title={view === 'text' ? 'Текстовое представление' : 'Подробная схема'}
+            wide
+            onClose={() => setView(null)}
+          >
+            <div
+              className="diagram-dialog-content"
+              tabIndex={0}
+              role="region"
+              aria-label={view === 'text' ? 'Текст схемы' : 'Изображение схемы'}
+            >
+              {view === 'text' ? (
+                <InfographicMobile visual={visual} base={base} />
+              ) : (
+                <div className="diagram-expanded">{canvas('-expanded')}</div>
+              )}
+              <p>{visual.caption}</p>
+            </div>
+            <div className="diagram-dialog-actions">
+              <button
+                className="button ghost"
+                onClick={() => setView(view === 'text' ? 'diagram' : 'text')}
+              >
+                {view === 'text' ? 'Показать схему' : 'Текстовое представление'}
+              </button>
+              <button className="button primary" onClick={() => setView(null)}>
+                Закрыть
+              </button>
+            </div>
+          </Modal>,
+          document.body,
+        )}
+    </figure>
+  )
 }
